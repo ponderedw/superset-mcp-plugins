@@ -239,26 +239,6 @@ async def get_stream_agent_responce(session_id, message,
                             'SUPERSET_PASSWORD'),
                     }.items() if v is not None}
                 }
-                # {
-                #     'command': "python",
-                #     'args': ["-m", "airflow_mcp_hipposys.mcp_airflow"],
-                #     "transport": "stdio",
-                #     'env': {k: v for k, v in {
-                #         'AIRFLOW_ASSISTENT_AI_CONN': os.getenv(
-                #             'AIRFLOW_ASSISTENT_AI_CONN'),
-                #         'airflow_api_url': os.getenv('airflow_api_url'),
-                #         'airflow_username': os.getenv('airflow_username'),
-                #         'airflow_password': os.getenv('airflow_password'),
-                #         'AIRFLOW_INSIGHTS_MODE':
-                #             os.getenv('AIRFLOW_INSIGHTS_MODE'),
-                #         'POST_MODE': os.getenv('POST_MODE'),
-                #         'TRANSPORT_TYPE': 'stdio',
-                #         '_AIRFLOW_WWW_USER_USERNAME':
-                #             os.getenv('_AIRFLOW_WWW_USER_USERNAME'),
-                #         '_AIRFLOW_WWW_USER_PASSWORD':
-                #             os.getenv('_AIRFLOW_WWW_USER_PASSWORD')
-                #     }.items() if v is not None}
-                # }
             }
     elif TRANSPORT_TYPE == 'sse':
         mcps = {
