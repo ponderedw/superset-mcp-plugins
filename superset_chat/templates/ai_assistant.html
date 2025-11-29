@@ -248,25 +248,36 @@ async function sendMessage(event) {
 
                             console.log('Created', pairs.length, 'pairs');
 
-                            // Replace from last to first to avoid index issues
-                            for (let i = pairs.length - 1; i >= 0; i--) {
+                            // Build segments: parts of content with their replacements
+                            // Sort pairs by start index to process in order
+                            pairs.sort((a, b) => a.start.index - b.start.index);
+
+                            const segments = [];
+                            let lastIndex = 0;
+
+                            for (let i = 0; i < pairs.length; i++) {
                                 const pair = pairs[i];
-                                // Use a unique placeholder that won't be affected by markdown conversion
+
+                                // Add content before this tool block
+                                segments.push(finalContent.substring(lastIndex, pair.start.index));
+
+                                // Add placeholder
                                 const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
+                                segments.push(placeholder);
 
-                                // Replace from start of "Start Running Tool" to end of "Tool Output"
-                                const startPos = pair.start.index;
-                                const endPos = pair.output.index + pair.output.fullMatch.length;
+                                // Update last index to after the output block
+                                lastIndex = pair.output.index + pair.output.fullMatch.length;
 
-                                // Get the content before and after
-                                const before = finalContent.substring(0, startPos);
-                                const after = finalContent.substring(endPos);
-
-                                finalContent = before + placeholder + after;
-
-                                console.log('✓ Paired tool #' + (pairs.length - i));
-                                console.log('  Removed', endPos - startPos, 'chars, added placeholder');
+                                console.log('✓ Added placeholder for tool #' + (i + 1));
                             }
+
+                            // Add remaining content after last tool block
+                            segments.push(finalContent.substring(lastIndex));
+
+                            // Rebuild content from segments
+                            finalContent = segments.join('');
+
+                            console.log('Rebuilt content with', pairs.length, 'placeholders');
 
                             console.log('Total tool blocks paired:', pairs.length);
                             if (pairs.length === 0) {
@@ -395,14 +406,31 @@ function addMessage(content, sender) {
             });
         }
 
-        // Replace from last to first
-        for (let i = pairs.length - 1; i >= 0; i--) {
+        // Build segments to avoid index shifting issues
+        pairs.sort((a, b) => a.start.index - b.start.index);
+
+        const segments = [];
+        let lastIndex = 0;
+
+        for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i];
+
+            // Add content before this tool block
+            segments.push(formattedContent.substring(lastIndex, pair.start.index));
+
+            // Add placeholder
             const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
-            const startPos = pair.start.index;
-            const endPos = pair.output.index + pair.output.fullMatch.length;
-            formattedContent = formattedContent.substring(0, startPos) + placeholder + formattedContent.substring(endPos);
+            segments.push(placeholder);
+
+            // Update last index
+            lastIndex = pair.output.index + pair.output.fullMatch.length;
         }
+
+        // Add remaining content
+        segments.push(formattedContent.substring(lastIndex));
+
+        // Rebuild
+        formattedContent = segments.join('');
     }
 
     // Now do standard markdown conversion
