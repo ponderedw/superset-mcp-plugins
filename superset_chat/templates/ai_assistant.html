@@ -211,23 +211,23 @@ async function sendMessage(event) {
                             const toolStarts = [];
                             const toolOutputs = [];
 
-                            // Find all "Start Running Tool" blocks
-                            const startPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```/g;
+                            // Find all "Start Running Tool" blocks (include the label in fullMatch)
+                            const startPattern = /(Start Running Tool:\s*```\s*[\s\S]*?```)/g;
                             let match;
                             while ((match = startPattern.exec(finalContent)) !== null) {
                                 toolStarts.push({
-                                    fullMatch: match[0],
-                                    data: match[1].trim(),
+                                    fullMatch: match[1],
+                                    data: match[1].replace(/Start Running Tool:\s*```\s*/, '').replace(/```\s*$/, '').trim(),
                                     index: match.index
                                 });
                             }
 
-                            // Find all "Tool Output" blocks
-                            const outputPattern = /Tool Output:\s*```\s*([\s\S]*?)```/g;
+                            // Find all "Tool Output" blocks (include the label in fullMatch)
+                            const outputPattern = /(Tool Output:\s*```\s*[\s\S]*?```)/g;
                             while ((match = outputPattern.exec(finalContent)) !== null) {
                                 toolOutputs.push({
-                                    fullMatch: match[0],
-                                    data: match[1].trim(),
+                                    fullMatch: match[1],
+                                    data: match[1].replace(/Tool Output:\s*```\s*/, '').replace(/```\s*$/, '').trim(),
                                     index: match.index
                                 });
                             }
@@ -376,21 +376,21 @@ function addMessage(content, sender) {
         const toolStarts = [];
         const toolOutputs = [];
 
-        const startPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```/g;
+        const startPattern = /(Start Running Tool:\s*```\s*[\s\S]*?```)/g;
         let match;
         while ((match = startPattern.exec(formattedContent)) !== null) {
             toolStarts.push({
-                fullMatch: match[0],
-                data: match[1].trim(),
+                fullMatch: match[1],
+                data: match[1].replace(/Start Running Tool:\s*```\s*/, '').replace(/```\s*$/, '').trim(),
                 index: match.index
             });
         }
 
-        const outputPattern = /Tool Output:\s*```\s*([\s\S]*?)```/g;
+        const outputPattern = /(Tool Output:\s*```\s*[\s\S]*?```)/g;
         while ((match = outputPattern.exec(formattedContent)) !== null) {
             toolOutputs.push({
-                fullMatch: match[0],
-                data: match[1].trim(),
+                fullMatch: match[1],
+                data: match[1].replace(/Tool Output:\s*```\s*/, '').replace(/```\s*$/, '').trim(),
                 index: match.index
             });
         }
