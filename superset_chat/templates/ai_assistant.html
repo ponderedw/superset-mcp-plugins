@@ -192,31 +192,40 @@ async function sendMessage(event) {
                             // First, convert tool blocks BEFORE general markdown processing
                             let finalContent = assistantContentDiv.innerHTML;
 
-                            console.log('Processing final content, length:', finalContent.length);
-                            console.log('Content preview:', finalContent.substring(0, 300));
+                            console.log('=== PROCESSING FINAL CONTENT ===');
+                            console.log('Content length:', finalContent.length);
+                            console.log('Full content:', finalContent);
+                            console.log('================================');
+
+                            // Check if "Start Running Tool:" exists in content
+                            if (finalContent.includes('Start Running Tool:')) {
+                                console.log('✓ "Start Running Tool:" found in content');
+                            } else {
+                                console.log('✗ "Start Running Tool:" NOT found in content');
+                            }
 
                             // Convert tool execution blocks to expandable format
-                            // Try both patterns: with \n\n at start and without (for first tool)
-                            const toolPattern1 = /\n\nStart Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
-                            const toolPattern2 = /Start Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+                            // The content has REAL newlines, not \n strings, so we need to match them properly
+                            // Use \s* to match any whitespace including real newlines
+                            const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
 
                             let matchCount = 0;
 
-                            // First try pattern with leading newlines (for consecutive tools)
-                            finalContent = finalContent.replace(toolPattern1, function(match, toolData, outputData) {
+                            finalContent = finalContent.replace(toolPattern, function(match, toolData, outputData) {
                                 matchCount++;
-                                console.log('Match found (pattern 1) #' + matchCount);
-                                return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
-                            });
-
-                            // Then try pattern without leading newlines (for first tool)
-                            finalContent = finalContent.replace(toolPattern2, function(match, toolData, outputData) {
-                                matchCount++;
-                                console.log('Match found (pattern 2) #' + matchCount);
+                                console.log('✓ Match found #' + matchCount);
+                                console.log('Tool data:', toolData.substring(0, 100));
+                                console.log('Output data:', outputData.substring(0, 100));
                                 return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
                             });
 
                             console.log('Total tool blocks found:', matchCount);
+                            if (matchCount === 0) {
+                                console.log('⚠️ WARNING: No tool blocks matched! Checking for partial patterns...');
+                                console.log('Has "Start Running Tool:"?', finalContent.includes('Start Running Tool:'));
+                                console.log('Has "Tool Output:"?', finalContent.includes('Tool Output:'));
+                                console.log('Has triple backticks?', finalContent.includes('```'));
+                            }
 
                             // Now do standard markdown conversion
                             finalContent = finalContent
@@ -279,15 +288,10 @@ function addMessage(content, sender) {
     // For assistant messages, process tool blocks first
     if (sender === 'assistant') {
         // Convert tool execution blocks to expandable format
-        // Try both patterns: with \n\n at start and without (for first tool)
-        const toolPattern1 = /\n\nStart Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
-        const toolPattern2 = /Start Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+        // Use \s* to match any whitespace including real newlines
+        const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
 
-        formattedContent = formattedContent.replace(toolPattern1, function(match, toolData, outputData) {
-            return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
-        });
-
-        formattedContent = formattedContent.replace(toolPattern2, function(match, toolData, outputData) {
+        formattedContent = formattedContent.replace(toolPattern, function(match, toolData, outputData) {
             return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
         });
     }
