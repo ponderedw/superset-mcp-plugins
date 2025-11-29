@@ -251,7 +251,8 @@ async function sendMessage(event) {
                             // Replace from last to first to avoid index issues
                             for (let i = pairs.length - 1; i >= 0; i--) {
                                 const pair = pairs[i];
-                                const placeholder = `<TOOL_BLOCK_START>${pair.start.data}<TOOL_BLOCK_MID>${pair.output.data}<TOOL_BLOCK_END>`;
+                                // Use a unique placeholder that won't be affected by markdown conversion
+                                const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
 
                                 // Replace from start of "Start Running Tool" to end of "Tool Output"
                                 const startPos = pair.start.index;
@@ -284,7 +285,7 @@ async function sendMessage(event) {
 
                             // Finally, convert tool block placeholders to expandable HTML
                             let placeholderCount = 0;
-                            finalContent = finalContent.replace(/<TOOL_BLOCK_START>([\s\S]*?)<TOOL_BLOCK_MID>([\s\S]*?)<TOOL_BLOCK_END>/g, function(match, toolData, outputData) {
+                            finalContent = finalContent.replace(/§§§TOOL_BLOCK_START§§§([\s\S]*?)§§§TOOL_BLOCK_MID§§§([\s\S]*?)§§§TOOL_BLOCK_END§§§/g, function(match, toolData, outputData) {
                                 placeholderCount++;
                                 console.log('Converting placeholder #' + placeholderCount);
 
@@ -388,7 +389,7 @@ function addMessage(content, sender) {
         // Replace from last to first
         for (let i = pairs.length - 1; i >= 0; i--) {
             const pair = pairs[i];
-            const placeholder = `<TOOL_BLOCK_START>${pair.start.data}<TOOL_BLOCK_MID>${pair.output.data}<TOOL_BLOCK_END>`;
+            const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
             const startPos = pair.start.index;
             const endPos = pair.output.index + pair.output.fullMatch.length;
             formattedContent = formattedContent.substring(0, startPos) + placeholder + formattedContent.substring(endPos);
@@ -404,7 +405,7 @@ function addMessage(content, sender) {
 
     // Convert tool block placeholders to expandable HTML
     if (sender === 'assistant') {
-        formattedContent = formattedContent.replace(/<TOOL_BLOCK_START>([\s\S]*?)<TOOL_BLOCK_MID>([\s\S]*?)<TOOL_BLOCK_END>/g, function(match, toolData, outputData) {
+        formattedContent = formattedContent.replace(/§§§TOOL_BLOCK_START§§§([\s\S]*?)§§§TOOL_BLOCK_MID§§§([\s\S]*?)§§§TOOL_BLOCK_END§§§/g, function(match, toolData, outputData) {
             const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
             const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
