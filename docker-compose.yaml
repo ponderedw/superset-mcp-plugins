@@ -2,10 +2,10 @@ version: "3"
 
 services:
   superset:
-    volumes:
-      - ./superset_chat/app:/app/app
-      - ./superset_chat/templates:/app/templates
-      - ./superset_chat/ai_superset_assistant.py:/app/ai_superset_assistant.py
+    # volumes:
+    #   - ./superset_chat/app:/app/app
+    #   - ./superset_chat/templates:/app/templates
+    #   - ./superset_chat/ai_superset_assistant.py:/app/ai_superset_assistant.py
     env_file:
       - .env
     networks:
@@ -26,6 +26,21 @@ services:
       postgres:
         condition: service_healthy
 
+
+  superset-importer:
+    env_file:
+      - superset/superset.env
+    build:
+      context: superset/imports
+      dockerfile: Dockerfile
+    container_name: superset-importer
+    networks:
+      - data-lake-network
+    depends_on:
+      superset:
+        condition: service_healthy
+    restart: "no"
+
   postgres:
     image: postgres:15
     container_name: postgres
@@ -38,12 +53,56 @@ services:
       POSTGRES_PASSWORD: postgres
       PGDATA: /var/lib/postgresql/data/db-files/
       POSTGRES_MULTIPLE_DATABASES: superset,postgres
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data/db-files
+    # volumes:
+    #   - ./pgdata:/var/lib/postgresql/data/db-files
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
       retries: 5
+
+  falkordb:
+    container_name: falkordb
+    image: falkordb/falkordb:latest
+    # volumes:
+    #   - ./falkordb_data:/var/lib/falkordb/data
+    ports:
+      - 3000:3000
+      - 6379:6379
+    restart: always
+    networks:
+      data-lake-network:
+
+  educational-dbt-docs:
+    container_name: educational-dbt-docs
+    ports:
+      - "8502:80"
+    build:
+      context: ./DbtEducationalDataProject
+      dockerfile: Dockerfile
+    volumes:
+      - ./DbtEducationalDataProject:/usr/app/dbt
+    depends_on:
+      - postgres
+    networks:
+      - data-lake-network
+    environment:
+      - DBT_PROFILES_DIR=/usr/app/dbt
+
+  dbt-graph-loader:
+    container_name: dbt-graph-loader
+    build:
+      context: ./dbt-graph-loader
+      dockerfile: Dockerfile
+    volumes:
+      - ./DbtEducationalDataProject:/dbt
+    depends_on:
+      - falkordb
+    networks:
+      - data-lake-network
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+    restart: "no"
 
 networks:
   data-lake-network: 

@@ -86,37 +86,116 @@ LANGFUSE_SECRET_KEY=your_secret_key
 
 ### Superset Integration
 
-Add the plugin to your Superset configuration (`superset_config.py`):
+The plugin integrates with Apache Superset using the `FLASK_APP_MUTATOR` configuration option. Add the following to your `superset_config.py`:
 
 ```python
-from superset_chat.ai_superset_assistant import AISupersetAssistantView
+import logging
 
-# Register the AI Assistant view
-CUSTOM_SECURITY_MANAGER = None  # Use your custom security manager if needed
+logger = logging.getLogger()
 
-# Add to Flask-AppBuilder
-FAB_ADD_SECURITY_VIEWS = True
+# Flask-AppBuilder Init Hook for custom views
+FLASK_APP_MUTATOR = lambda app: init_custom_views(app)
 
-# Register the custom view
-def ADDON_MANAGER_POST_INIT(app):
-    appbuilder = app.appbuilder
-    appbuilder.add_view(
-        AISupersetAssistantView,
-        "AI Assistant",
-        icon="fa-robot",
-        category="AI",
-        category_icon="fa-brain",
-    )
+def init_custom_views(app):
+    """Initialize custom views after Flask app is created"""
+    try:
+        from superset_chat.ai_superset_assistant import AISupersetAssistantView
+
+        # Get the appbuilder instance
+        appbuilder = app.appbuilder
+
+        # Register the view
+        appbuilder.add_view(
+            AISupersetAssistantView,
+            "AI Superset Assistant",
+            icon="fa-robot",
+            category="Custom Tools"
+        )
+
+        logger.info("✅ AI Superset Assistant plugin registered successfully!")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to register AI Superset Assistant plugin: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+```
+
+**Why `FLASK_APP_MUTATOR`?**
+
+`FLASK_APP_MUTATOR` is the recommended modern approach for registering custom views in Superset. It's called after the Flask application is fully initialized, ensuring all dependencies are available.
+
+**Installation in Docker**
+
+If you're using Docker, add the plugin installation to your Dockerfile:
+
+```dockerfile
+FROM apache/superset:4.1.1
+
+USER root
+
+# Install dependencies
+RUN pip install psycopg2-binary Pillow
+
+# Install the plugin
+RUN pip install superset-chat==0.1.0a11
+
+# Copy your superset_config.py
+COPY ./superset_config.py /app/superset_config.py
+ENV SUPERSET_CONFIG_PATH /app/superset_config.py
+```
+
+For development, you can mount the plugin code as volumes in docker-compose.yaml:
+
+```yaml
+services:
+  superset:
+    volumes:
+      - ./superset_chat/app:/app/app
+      - ./superset_chat/templates:/app/templates
+      - ./superset_chat/ai_superset_assistant.py:/app/ai_superset_assistant.py
 ```
 
 ## Usage
 
-### Docker Compose
+### Quick Start with Docker Compose
 
 A complete Docker Compose setup is provided for quick start:
 
 ```bash
+# Clone the repository
+git clone https://github.com/ponderedw/superset-mcp-plugins.git
+cd superset-mcp-plugins
+
+# Create .env file with required variables
+cat > .env << EOF
+# Admin password for Superset
+ADMIN_PASSWORD=superset
+
+# Database configuration
+DATABASE_HOST=postgres
+DATABASE_NAME=postgres
+DATABASE_USER=postgres
+DATABASE_PASSWORD=postgres
+
+# Superset API credentials
+SUPERSET_API_URL=http://superset:8088
+SUPERSET_USERNAME=superset_admin
+SUPERSET_PASSWORD=superset
+
+# LLM Provider (add your API key)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# OR
+# OPENAI_API_KEY=your_openai_api_key_here
+
+# MCP Transport
+TRANSPORT_TYPE=stdio
+EOF
+
+# Start the services
 docker-compose up -d
+
+# Check logs to verify plugin installation
+docker-compose logs superset | grep "AI Superset Assistant"
 ```
 
 This will start:
@@ -125,18 +204,71 @@ This will start:
 
 ### Access the AI Assistant
 
-1. Navigate to your Superset instance (default: http://localhost:8088)
-2. Log in with your credentials
-3. Find "AI Assistant" in the navigation menu
-4. Start chatting with your AI assistant
+1. Navigate to your Superset instance: http://localhost:8088
+2. Log in with credentials:
+   - Username: `superset_admin`
+   - Password: `superset` (or value from `ADMIN_PASSWORD` env var)
+3. Look for **"Custom Tools"** in the top navigation menu
+4. Click on **"AI Superset Assistant"** (with robot icon)
+5. Start chatting with your AI assistant
 
 ### Example Queries
+
+Once in the chat interface, try these queries:
 
 - "Show me all available dashboards"
 - "What datasets do we have?"
 - "Explain the lineage for the sales_model"
 - "Create a chart showing monthly revenue"
 - "What are the most popular dashboards?"
+- "How many charts are in the analytics dashboard?"
+- "What datasources are connected to Superset?"
+
+### API Endpoints
+
+The plugin provides the following REST endpoints:
+
+- **POST** `/ai_superset_assistant/api/new_session` - Create a new chat session
+- **POST** `/ai_superset_assistant/api/chat` - Send a message (synchronous response)
+- **POST** `/ai_superset_assistant/api/chat_stream` - Send a message (streaming response)
+- **POST** `/ai_superset_assistant/api/clear_session` - Clear a chat session
+
+Example API usage:
+
+```bash
+# Create a new session
+curl -X POST http://localhost:8088/ai_superset_assistant/api/new_session \
+  -H "Content-Type: application/json" \
+  -b cookies.txt
+
+# Send a message with streaming
+curl -X POST http://localhost:8088/ai_superset_assistant/api/chat_stream \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"message": "Show me all dashboards", "session_id": "your-session-id"}'
+```
+
+### Troubleshooting
+
+**Plugin not appearing in menu:**
+- Check Superset logs: `docker-compose logs superset | grep "AI Superset Assistant"`
+- Verify the plugin is installed: `docker-compose exec superset pip show superset-chat`
+- Ensure `FLASK_APP_MUTATOR` is configured in `superset_config.py`
+
+**Authentication errors:**
+- Verify you're logged into Superset
+- Check that your user has proper permissions
+- The plugin requires authenticated users
+
+**LLM errors:**
+- Verify your LLM API key is set correctly in the `.env` file
+- Check logs for specific error messages
+- Ensure you have internet connectivity for API calls
+
+**Database connection errors:**
+- Verify `SQLALCHEMY_DATABASE_URI` is set correctly
+- Check that PostgreSQL is running and accessible
+- Ensure the database user has proper permissions
 
 ## Development
 

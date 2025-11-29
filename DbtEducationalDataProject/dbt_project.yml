@@ -1,0 +1,234 @@
+name: 'DbtEducationalDataProject'
+version: '1.0.0'
+profile: 'DbtEducationalDataProject'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+on-run-start: |-
+  {% set creation_query_str %}
+    -- Creating educational data schema and source tables
+    CREATE SCHEMA IF NOT EXISTS raw_edu;
+
+    -- 1. Students table
+    CREATE TABLE if not exists raw_edu.students (
+        student_id SERIAL PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT UNIQUE,
+        date_of_birth DATE,
+        enrollment_date DATE,
+        graduation_date DATE,
+        student_status TEXT CHECK (student_status IN ('active', 'graduated', 'dropped', 'suspended')),
+        gpa DECIMAL(3,2),
+        major_id INT,
+        advisor_id INT,
+        address_id INT,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 2. Courses table
+    CREATE TABLE if not exists raw_edu.courses (
+        course_id SERIAL PRIMARY KEY,
+        course_code TEXT UNIQUE NOT NULL,
+        course_name TEXT NOT NULL,
+        description TEXT,
+        credits INT NOT NULL,
+        department_id INT,
+        prerequisite_course_id INT,
+        difficulty_level INT CHECK (difficulty_level BETWEEN 1 AND 5),
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 3. Departments table
+    CREATE TABLE if not exists raw_edu.departments (
+        department_id SERIAL PRIMARY KEY,
+        department_name TEXT NOT NULL,
+        department_code TEXT UNIQUE,
+        head_faculty_id INT,
+        budget DECIMAL(12,2),
+        building_location TEXT,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 4. Faculty table
+    CREATE TABLE if not exists raw_edu.faculty (
+        faculty_id SERIAL PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT UNIQUE,
+        department_id INT,
+        position TEXT,
+        salary DECIMAL(10,2),
+        hire_date DATE,
+        office_number TEXT,
+        research_interests TEXT[],
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 5. Enrollments table (junction table)
+    CREATE TABLE if not exists raw_edu.enrollments (
+        enrollment_id SERIAL PRIMARY KEY,
+        student_id INT,
+        course_id INT,
+        semester_id INT,
+        enrollment_date DATE,
+        completion_date DATE,
+        grade TEXT,
+        grade_points DECIMAL(3,2),
+        attendance_percentage DECIMAL(5,2),
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 6. Semesters table
+    CREATE TABLE if not exists raw_edu.semesters (
+        semester_id SERIAL PRIMARY KEY,
+        semester_name TEXT NOT NULL,
+        academic_year TEXT,
+        start_date DATE,
+        end_date DATE,
+        is_current BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 7. Class sessions table
+    CREATE TABLE if not exists raw_edu.class_sessions (
+        session_id SERIAL PRIMARY KEY,
+        course_id INT,
+        faculty_id INT,
+        semester_id INT,
+        session_time TIME,
+        session_date DATE,
+        room_id INT,
+        attendance_count INT,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 8. Assignments table
+    CREATE TABLE if not exists raw_edu.assignments (
+        assignment_id SERIAL PRIMARY KEY,
+        course_id INT,
+        semester_id INT,
+        assignment_name TEXT NOT NULL,
+        assignment_type TEXT,
+        due_date DATE,
+        max_points DECIMAL(6,2),
+        weight_percentage DECIMAL(5,2),
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 9. Assignment submissions table
+    CREATE TABLE if not exists raw_edu.assignment_submissions (
+        submission_id SERIAL PRIMARY KEY,
+        assignment_id INT,
+        student_id INT,
+        submission_date TIMESTAMP,
+        score DECIMAL(6,2),
+        late_submission BOOLEAN DEFAULT false,
+        feedback TEXT,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 10. Financial aid table
+    CREATE TABLE if not exists raw_edu.financial_aid (
+        aid_id SERIAL PRIMARY KEY,
+        student_id INT,
+        aid_type TEXT,
+        amount DECIMAL(10,2),
+        academic_year TEXT,
+        disbursement_date DATE,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- 11. Tuition payments table
+    CREATE TABLE if not exists raw_edu.tuition_payments (
+        payment_id SERIAL PRIMARY KEY,
+        student_id INT,
+        semester_id INT,
+        amount DECIMAL(10,2),
+        payment_date DATE,
+        payment_method TEXT,
+        late_fee DECIMAL(8,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT now()
+    );
+
+    -- Clear existing data
+    TRUNCATE TABLE raw_edu.students, raw_edu.courses, raw_edu.departments, raw_edu.faculty, 
+                  raw_edu.enrollments, raw_edu.semesters, raw_edu.class_sessions, 
+                  raw_edu.assignments, raw_edu.assignment_submissions, raw_edu.financial_aid, 
+                  raw_edu.tuition_payments CASCADE;
+
+    -- Insert sample data
+    INSERT INTO raw_edu.departments (department_name, department_code, budget, building_location) VALUES
+        ('Computer Science', 'CS', 2500000.00, 'Tech Building A'),
+        ('Mathematics', 'MATH', 1800000.00, 'Science Hall'),
+        ('Business Administration', 'BUS', 3200000.00, 'Business Center'),
+        ('Psychology', 'PSYC', 1500000.00, 'Liberal Arts Building'),
+        ('Engineering', 'ENG', 4000000.00, 'Engineering Complex');
+
+    INSERT INTO raw_edu.faculty (first_name, last_name, email, department_id, position, salary, hire_date, office_number) VALUES
+        ('John', 'Smith', 'j.smith@edu.edu', 1, 'Professor', 95000.00, '2015-08-15', 'TA-201'),
+        ('Sarah', 'Johnson', 's.johnson@edu.edu', 1, 'Associate Professor', 78000.00, '2018-01-10', 'TA-205'),
+        ('Michael', 'Brown', 'm.brown@edu.edu', 2, 'Professor', 89000.00, '2012-09-01', 'SH-301'),
+        ('Emily', 'Davis', 'e.davis@edu.edu', 3, 'Assistant Professor', 72000.00, '2020-08-20', 'BC-401'),
+        ('Robert', 'Wilson', 'r.wilson@edu.edu', 5, 'Professor', 105000.00, '2010-01-15', 'EC-101');
+
+    INSERT INTO raw_edu.semesters (semester_name, academic_year, start_date, end_date, is_current) VALUES
+        ('Fall 2023', '2023-2024', '2023-08-28', '2023-12-15', false),
+        ('Spring 2024', '2023-2024', '2024-01-15', '2024-05-10', false),
+        ('Fall 2024', '2024-2025', '2024-08-26', '2024-12-13', true),
+        ('Spring 2025', '2024-2025', '2025-01-13', '2025-05-08', false);
+
+    INSERT INTO raw_edu.courses (course_code, course_name, credits, department_id, difficulty_level) VALUES
+        ('CS101', 'Introduction to Computer Science', 3, 1, 1),
+        ('CS201', 'Data Structures and Algorithms', 4, 1, 3),
+        ('CS301', 'Database Systems', 3, 1, 3),
+        ('CS401', 'Machine Learning', 4, 1, 4),
+        ('MATH101', 'Calculus I', 4, 2, 2),
+        ('MATH201', 'Linear Algebra', 3, 2, 3),
+        ('MATH301', 'Statistics', 3, 2, 2),
+        ('BUS101', 'Introduction to Business', 3, 3, 1),
+        ('BUS201', 'Marketing Principles', 3, 3, 2),
+        ('BUS301', 'Financial Management', 4, 3, 3),
+        ('PSYC101', 'General Psychology', 3, 4, 1),
+        ('ENG101', 'Engineering Fundamentals', 4, 5, 2);
+
+    INSERT INTO raw_edu.students (first_name, last_name, email, date_of_birth, enrollment_date, student_status, gpa, major_id, address_id) VALUES
+        ('Alice', 'Anderson', 'alice.anderson@student.edu', '2002-03-15', '2022-08-28', 'active', 3.75, 1, 1),
+        ('Bob', 'Baker', 'bob.baker@student.edu', '2001-11-22', '2021-08-30', 'active', 3.20, 1, 2),
+        ('Charlie', 'Chen', 'charlie.chen@student.edu', '2003-07-08', '2023-08-28', 'active', 3.90, 2, 3),
+        ('Diana', 'Davis', 'diana.davis@student.edu', '2002-01-12', '2022-08-28', 'active', 3.45, 3, 4),
+        ('Edward', 'Evans', 'edward.evans@student.edu', '2000-09-18', '2020-08-31', 'graduated', 3.60, 1, 5),
+        ('Fiona', 'Foster', 'fiona.foster@student.edu', '2002-05-25', '2022-08-28', 'active', 3.85, 5, 6),
+        ('George', 'Garcia', 'george.garcia@student.edu', '2003-12-03', '2023-08-28', 'active', 2.95, 4, 7),
+        ('Hannah', 'Harris', 'hannah.harris@student.edu', '2001-06-14', '2021-08-30', 'active', 3.70, 2, 8);
+
+  {% endset %}
+  {{ creation_query_str }}
+
+models:
+  DbtEducationalDataProject:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      core:
+        +materialized: table
+      finance:
+        +materialized: table
+      academic:
+        +materialized: table
+
+vars:
+  current_semester: "'Fall 2024'"
+  academic_year: "'2024-2025'"

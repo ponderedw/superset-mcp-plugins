@@ -1,6 +1,4 @@
 sqlalchemy-redshift
 flask-appbuilder
 Authlib
-sqlalchemy-trino
-trino
 psycopg2-binary
