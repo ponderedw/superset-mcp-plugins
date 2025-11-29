@@ -234,6 +234,16 @@ async function sendMessage(event) {
 
                             console.log('Found', toolStarts.length, 'tool starts and', toolOutputs.length, 'tool outputs');
 
+                            // Log each tool start position and preview
+                            toolStarts.forEach((start, idx) => {
+                                console.log('Tool Start #' + (idx + 1) + ' at index ' + start.index + ':', start.data.substring(0, 80));
+                            });
+
+                            // Log each tool output position and preview
+                            toolOutputs.forEach((output, idx) => {
+                                console.log('Tool Output #' + (idx + 1) + ' at index ' + output.index + ':', output.data.substring(0, 80));
+                            });
+
                             // Now pair them up - match in order (first start with first output, etc.)
                             const pairs = [];
                             const minPairs = Math.min(toolStarts.length, toolOutputs.length);
@@ -259,7 +269,9 @@ async function sendMessage(event) {
                                 const pair = pairs[i];
 
                                 // Add content before this tool block
-                                segments.push(finalContent.substring(lastIndex, pair.start.index));
+                                const beforeContent = finalContent.substring(lastIndex, pair.start.index);
+                                console.log('Content before tool #' + (i + 1) + ' (length: ' + beforeContent.length + '):', beforeContent.substring(0, 200));
+                                segments.push(beforeContent);
 
                                 // Add placeholder
                                 const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
@@ -269,10 +281,13 @@ async function sendMessage(event) {
                                 lastIndex = pair.output.index + pair.output.fullMatch.length;
 
                                 console.log('✓ Added placeholder for tool #' + (i + 1));
+                                console.log('Tool #' + (i + 1) + ' start index:', pair.start.index, 'end index:', lastIndex);
                             }
 
                             // Add remaining content after last tool block
-                            segments.push(finalContent.substring(lastIndex));
+                            const remainingContent = finalContent.substring(lastIndex);
+                            console.log('Content after all tools (length: ' + remainingContent.length + '):', remainingContent.substring(0, 200));
+                            segments.push(remainingContent);
 
                             // Rebuild content from segments
                             finalContent = segments.join('');
