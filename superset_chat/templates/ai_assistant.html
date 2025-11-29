@@ -47,21 +47,22 @@ function toggleCodeBlock(header) {
 
 function convertMarkdownToExpandable(messageElement) {
     let content = messageElement.innerHTML;
-    
+
     // Debug: Log the content to see what we're working with
     console.log('Processing message content:', content);
-    
-    // More precise pattern that stops at the first paragraph after Tool Output
-    const toolPattern = /Start Running Tool:<br><pre><code>([\s\S]*?)<\/code><\/pre><br><br><br>Tool Output:\s*<br><pre><code>([\s\S]*?)<\/code><\/pre><br>/g;
-    
+
+    // Updated pattern to handle consecutive tool calls
+    // Matches: <br><br>Start Running Tool:<br><pre><code>...<br><br>Tool Output:<br><pre><code>...<br>
+    const toolPattern = /<br><br>Start Running Tool:<br><pre><code>([\s\S]*?)<\/code><\/pre><br><br>Tool Output:<br><pre><code>([\s\S]*?)<\/code><\/pre><br>/g;
+
     let newContent = content.replace(toolPattern, function(match, toolData, outputData) {
         console.log('Found tool block match:', { toolData: toolData.substring(0, 100), outputData: outputData.substring(0, 100) });
-        
+
         // Clean up the data
         const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
         const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-        
-        const replacement = `
+
+        const replacement = `<br>
             <div class="code-block-container">
                 <div class="code-block-header" data-toggle="expandable">
                     <span>🔧 Start Running Tool</span>
@@ -76,15 +77,15 @@ function convertMarkdownToExpandable(messageElement) {
                 </div>
             </div><br>
         `;
-        
+
         console.log('Applied tool block replacement');
         return replacement;
     });
-    
+
     // Only update if we made changes
     if (newContent !== content) {
         messageElement.innerHTML = newContent;
-        
+
         // Add event listeners to the new expandable headers
         const expandableHeaders = messageElement.querySelectorAll('[data-toggle="expandable"]');
         expandableHeaders.forEach(header => {
@@ -93,7 +94,7 @@ function convertMarkdownToExpandable(messageElement) {
             });
             header.style.cursor = 'pointer';
         });
-        
+
         console.log('Added event listeners to', expandableHeaders.length, 'headers');
     } else {
         console.log('No tool blocks found to convert');

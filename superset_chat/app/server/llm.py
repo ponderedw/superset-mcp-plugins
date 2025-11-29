@@ -91,7 +91,9 @@ class ChatMessage:
                     return cls._handle_on_chat_model_stream(event)
             case 'on_tool_start':
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
-                                   f'''\n\nStart Running Tool:
+                                   f'''
+
+Start Running Tool:
 ```
 Data: {event['data']['input']}
 Function: {event['name']}
@@ -99,9 +101,13 @@ Function: {event['name']}
 ''')
             case 'on_tool_end':
                 return ChatMessage(LLMEventType.CHAT_CHUNK, cls.Sender.AI,
-                                   f'''\n\nTool Output: \n```\n
+                                   f'''
+
+Tool Output:
+```
 {event['data']['output'].content}
-\n```\n''')
+```
+''')
                                 #    '')
             # The conversation is done.
             case 'done':
