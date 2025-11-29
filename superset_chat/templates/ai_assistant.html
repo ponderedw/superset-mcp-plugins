@@ -45,69 +45,9 @@ function toggleCodeBlock(header) {
     }
 }
 
-function convertMarkdownToExpandable(messageElement) {
-    let content = messageElement.innerHTML;
-
-    // Debug: Log the content to see what we're working with
-    console.log('Processing message content:', content);
-
-    // Updated pattern to handle consecutive tool calls
-    // Matches: <br><br>Start Running Tool:<br><pre><code>...<br><br>Tool Output:<br><pre><code>...<br>
-    const toolPattern = /<br><br>Start Running Tool:<br><pre><code>([\s\S]*?)<\/code><\/pre><br><br>Tool Output:<br><pre><code>([\s\S]*?)<\/code><\/pre><br>/g;
-
-    let newContent = content.replace(toolPattern, function(match, toolData, outputData) {
-        console.log('Found tool block match:', { toolData: toolData.substring(0, 100), outputData: outputData.substring(0, 100) });
-
-        // Clean up the data
-        const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-        const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-
-        const replacement = `<br>
-            <div class="code-block-container">
-                <div class="code-block-header" data-toggle="expandable">
-                    <span>🔧 Start Running Tool</span>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div class="code-block-content">
-                    <pre>${cleanToolData}</pre>
-                    <div class="tool-output">
-                        <strong>Tool Output:</strong>
-                        <pre>${cleanOutputData}</pre>
-                    </div>
-                </div>
-            </div><br>
-        `;
-
-        console.log('Applied tool block replacement');
-        return replacement;
-    });
-
-    // Only update if we made changes
-    if (newContent !== content) {
-        messageElement.innerHTML = newContent;
-
-        // Add event listeners to the new expandable headers
-        const expandableHeaders = messageElement.querySelectorAll('[data-toggle="expandable"]');
-        expandableHeaders.forEach(header => {
-            header.addEventListener('click', function() {
-                toggleCodeBlock(this);
-            });
-            header.style.cursor = 'pointer';
-        });
-
-        console.log('Added event listeners to', expandableHeaders.length, 'headers');
-    } else {
-        console.log('No tool blocks found to convert');
-    }
-}
-
-function processNewMessage(messageElement) {
-    convertMarkdownToExpandable(messageElement);
-}
 
 // Make functions globally available
 window.toggleCodeBlock = toggleCodeBlock;
-window.processNewMessage = processNewMessage;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeCSRF().then(() => {
@@ -249,15 +189,66 @@ async function sendMessage(event) {
                         } else if (data.type === 'error') {
                             assistantContentDiv.innerHTML = data.content;
                         } else if (data.type === 'done') {
-                            const finalContent = assistantContentDiv.innerHTML
+                            // First, convert tool blocks BEFORE general markdown processing
+                            let finalContent = assistantContentDiv.innerHTML;
+
+                            console.log('Processing final content, length:', finalContent.length);
+                            console.log('Content preview:', finalContent.substring(0, 300));
+
+                            // Convert tool execution blocks to expandable format
+                            // Try both patterns: with \n\n at start and without (for first tool)
+                            const toolPattern1 = /\n\nStart Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+                            const toolPattern2 = /Start Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+
+                            let matchCount = 0;
+
+                            // First try pattern with leading newlines (for consecutive tools)
+                            finalContent = finalContent.replace(toolPattern1, function(match, toolData, outputData) {
+                                matchCount++;
+                                console.log('Match found (pattern 1) #' + matchCount);
+                                return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
+                            });
+
+                            // Then try pattern without leading newlines (for first tool)
+                            finalContent = finalContent.replace(toolPattern2, function(match, toolData, outputData) {
+                                matchCount++;
+                                console.log('Match found (pattern 2) #' + matchCount);
+                                return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
+                            });
+
+                            console.log('Total tool blocks found:', matchCount);
+
+                            // Now do standard markdown conversion
+                            finalContent = finalContent
                                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                                 .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                                 .replace(/\n/g, '<br>');
+
+                            // Finally, convert tool block placeholders to expandable HTML
+                            finalContent = finalContent.replace(/<TOOL_BLOCK_START>([\s\S]*?)<TOOL_BLOCK_MID>([\s\S]*?)<TOOL_BLOCK_END>/g, function(match, toolData, outputData) {
+                                const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+                                const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+                                return `<br>
+                                    <div class="code-block-container">
+                                        <div class="code-block-header collapsed" onclick="toggleCodeBlock(this)">
+                                            <span>🔧 Tool Execution</span>
+                                            <span class="toggle-icon">▼</span>
+                                        </div>
+                                        <div class="code-block-content">
+                                            <pre>${cleanToolData}</pre>
+                                            <div class="tool-output">
+                                                <strong>Tool Output:</strong>
+                                                <pre>${cleanOutputData}</pre>
+                                            </div>
+                                        </div>
+                                    </div><br>
+                                `;
+                            });
+
                             assistantContentDiv.innerHTML = finalContent;
-                            
-                            // Process the message for expandable code blocks after completion
-                            processNewMessage(assistantMessageDiv);
+                            console.log('Final content set');
                             break;
                         }
                     } catch (e) {
@@ -282,23 +273,61 @@ function addMessage(content, sender) {
     const messagesContainer = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
-    
-    const formattedContent = content
+
+    let formattedContent = content;
+
+    // For assistant messages, process tool blocks first
+    if (sender === 'assistant') {
+        // Convert tool execution blocks to expandable format
+        // Try both patterns: with \n\n at start and without (for first tool)
+        const toolPattern1 = /\n\nStart Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+        const toolPattern2 = /Start Running Tool:\n```\n([\s\S]*?)```\n\nTool Output:\n```\n([\s\S]*?)```\n/g;
+
+        formattedContent = formattedContent.replace(toolPattern1, function(match, toolData, outputData) {
+            return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
+        });
+
+        formattedContent = formattedContent.replace(toolPattern2, function(match, toolData, outputData) {
+            return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
+        });
+    }
+
+    // Now do standard markdown conversion
+    formattedContent = formattedContent
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\n/g, '<br>');
-    
+
+    // Convert tool block placeholders to expandable HTML
+    if (sender === 'assistant') {
+        formattedContent = formattedContent.replace(/<TOOL_BLOCK_START>([\s\S]*?)<TOOL_BLOCK_MID>([\s\S]*?)<TOOL_BLOCK_END>/g, function(match, toolData, outputData) {
+            const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+            const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+            return `<br>
+                <div class="code-block-container">
+                    <div class="code-block-header collapsed" onclick="toggleCodeBlock(this)">
+                        <span>🔧 Tool Execution</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div class="code-block-content">
+                        <pre>${cleanToolData}</pre>
+                        <div class="tool-output">
+                            <strong>Tool Output:</strong>
+                            <pre>${cleanOutputData}</pre>
+                        </div>
+                    </div>
+                </div><br>
+            `;
+        });
+    }
+
     messageDiv.innerHTML = `
         <div>${formattedContent}</div>
         <div class="message-time">${new Date().toLocaleTimeString()}</div>
     `;
-    
-    // Process for expandable code blocks if it's an assistant message
-    if (sender === 'assistant') {
-        processNewMessage(messageDiv);
-    }
-    
+
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
