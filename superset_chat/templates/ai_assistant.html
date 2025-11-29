@@ -285,6 +285,15 @@ async function sendMessage(event) {
 
                             // Finally, convert tool block placeholders to expandable HTML
                             let placeholderCount = 0;
+
+                            // Check how many placeholders exist in the content
+                            const placeholderMatches = finalContent.match(/§§§TOOL_BLOCK_START§§§/g);
+                            console.log('Placeholders in content:', placeholderMatches ? placeholderMatches.length : 0);
+
+                            // Check if the section sign survived
+                            console.log('Content contains §§§ ?', finalContent.includes('§§§'));
+                            console.log('First 500 chars after markdown:', finalContent.substring(0, 500));
+
                             finalContent = finalContent.replace(/§§§TOOL_BLOCK_START§§§([\s\S]*?)§§§TOOL_BLOCK_MID§§§([\s\S]*?)§§§TOOL_BLOCK_END§§§/g, function(match, toolData, outputData) {
                                 placeholderCount++;
                                 console.log('Converting placeholder #' + placeholderCount);
