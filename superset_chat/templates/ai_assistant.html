@@ -253,13 +253,18 @@ async function sendMessage(event) {
                                 const pair = pairs[i];
                                 const placeholder = `<TOOL_BLOCK_START>${pair.start.data}<TOOL_BLOCK_MID>${pair.output.data}<TOOL_BLOCK_END>`;
 
-                                // Replace the tool start and output with placeholder
+                                // Replace from start of "Start Running Tool" to end of "Tool Output"
                                 const startPos = pair.start.index;
                                 const endPos = pair.output.index + pair.output.fullMatch.length;
 
-                                finalContent = finalContent.substring(0, startPos) + placeholder + finalContent.substring(endPos);
+                                // Get the content before and after
+                                const before = finalContent.substring(0, startPos);
+                                const after = finalContent.substring(endPos);
 
-                                console.log('✓ Paired tool #' + (i + 1));
+                                finalContent = before + placeholder + after;
+
+                                console.log('✓ Paired tool #' + (pairs.length - i));
+                                console.log('  Removed', endPos - startPos, 'chars, added placeholder');
                             }
 
                             console.log('Total tool blocks paired:', pairs.length);
@@ -278,7 +283,11 @@ async function sendMessage(event) {
                                 .replace(/\n/g, '<br>');
 
                             // Finally, convert tool block placeholders to expandable HTML
+                            let placeholderCount = 0;
                             finalContent = finalContent.replace(/<TOOL_BLOCK_START>([\s\S]*?)<TOOL_BLOCK_MID>([\s\S]*?)<TOOL_BLOCK_END>/g, function(match, toolData, outputData) {
+                                placeholderCount++;
+                                console.log('Converting placeholder #' + placeholderCount);
+
                                 const cleanToolData = toolData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
                                 const cleanOutputData = outputData.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
@@ -298,6 +307,8 @@ async function sendMessage(event) {
                                     </div><br>
                                 `;
                             });
+
+                            console.log('Converted', placeholderCount, 'placeholders to HTML');
 
                             assistantContentDiv.innerHTML = finalContent;
 
