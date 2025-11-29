@@ -258,39 +258,67 @@ async function sendMessage(event) {
 
                             console.log('Created', pairs.length, 'pairs');
 
-                            // Build segments: parts of content with their replacements
-                            // Sort pairs by start index to process in order
-                            pairs.sort((a, b) => a.start.index - b.start.index);
+                            // IMPORTANT: When tools run in parallel, the content structure is:
+                            // "Start Running Tool #1" then "Start Running Tool #2" then "Tool Output #1" then "Tool Output #2"
+                            // We can't treat them as contiguous blocks because Start#1...Output#1 would include Start#2
+                            // Solution: Collect all the segments to replace (both starts and outputs) separately,
+                            // sort them by position, then replace them with placeholders in reverse order to avoid index shifting
 
-                            const segments = [];
-                            let lastIndex = 0;
+                            const segmentsToReplace = [];
 
-                            for (let i = 0; i < pairs.length; i++) {
-                                const pair = pairs[i];
+                            // Add all start blocks
+                            toolStarts.forEach((start, idx) => {
+                                segmentsToReplace.push({
+                                    type: 'start',
+                                    index: start.index,
+                                    endIndex: start.index + start.fullMatch.length,
+                                    data: start.data,
+                                    pairIndex: idx,
+                                    fullMatch: start.fullMatch
+                                });
+                            });
 
-                                // Add content before this tool block
-                                const beforeContent = finalContent.substring(lastIndex, pair.start.index);
-                                console.log('Content before tool #' + (i + 1) + ' (length: ' + beforeContent.length + '):', beforeContent.substring(0, 200));
-                                segments.push(beforeContent);
+                            // Add all output blocks
+                            toolOutputs.forEach((output, idx) => {
+                                segmentsToReplace.push({
+                                    type: 'output',
+                                    index: output.index,
+                                    endIndex: output.index + output.fullMatch.length,
+                                    data: output.data,
+                                    pairIndex: idx,
+                                    fullMatch: output.fullMatch
+                                });
+                            });
 
-                                // Add placeholder
-                                const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
-                                segments.push(placeholder);
+                            // Sort by position (ascending)
+                            segmentsToReplace.sort((a, b) => a.index - b.index);
 
-                                // Update last index to after the output block
-                                lastIndex = pair.output.index + pair.output.fullMatch.length;
+                            console.log('Segments to replace (in document order):');
+                            segmentsToReplace.forEach((seg, idx) => {
+                                console.log('  Segment #' + (idx + 1) + ' (' + seg.type + ' for pair ' + seg.pairIndex + '): ' + seg.index + ' - ' + seg.endIndex);
+                            });
 
-                                console.log('✓ Added placeholder for tool #' + (i + 1));
-                                console.log('Tool #' + (i + 1) + ' start index:', pair.start.index, 'end index:', lastIndex);
+                            // Now replace in REVERSE order to avoid index shifting
+                            // But first, we need to build the complete tool block HTML for each pair
+                            const pairPlaceholders = pairs.map((pair, idx) => {
+                                return `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
+                            });
+
+                            // Process segments in reverse order
+                            for (let i = segmentsToReplace.length - 1; i >= 0; i--) {
+                                const segment = segmentsToReplace[i];
+
+                                // If this is a "start" segment, replace with the full tool block placeholder
+                                // If this is an "output" segment, just remove it (empty string)
+                                const replacement = segment.type === 'start' ? pairPlaceholders[segment.pairIndex] : '';
+
+                                // Replace this segment in the content
+                                finalContent = finalContent.substring(0, segment.index) +
+                                             replacement +
+                                             finalContent.substring(segment.endIndex);
+
+                                console.log('Replaced ' + segment.type + ' #' + segment.pairIndex + ' at ' + segment.index + '-' + segment.endIndex);
                             }
-
-                            // Add remaining content after last tool block
-                            const remainingContent = finalContent.substring(lastIndex);
-                            console.log('Content after all tools (length: ' + remainingContent.length + '):', remainingContent.substring(0, 200));
-                            segments.push(remainingContent);
-
-                            // Rebuild content from segments
-                            finalContent = segments.join('');
 
                             console.log('Rebuilt content with', pairs.length, 'placeholders');
 
@@ -421,31 +449,49 @@ function addMessage(content, sender) {
             });
         }
 
-        // Build segments to avoid index shifting issues
-        pairs.sort((a, b) => a.start.index - b.start.index);
+        // Use the same replacement strategy as in sendMessage to handle parallel tool execution
+        const segmentsToReplace = [];
 
-        const segments = [];
-        let lastIndex = 0;
+        // Add all start blocks
+        toolStarts.forEach((start, idx) => {
+            segmentsToReplace.push({
+                type: 'start',
+                index: start.index,
+                endIndex: start.index + start.fullMatch.length,
+                data: start.data,
+                pairIndex: idx,
+                fullMatch: start.fullMatch
+            });
+        });
 
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
+        // Add all output blocks
+        toolOutputs.forEach((output, idx) => {
+            segmentsToReplace.push({
+                type: 'output',
+                index: output.index,
+                endIndex: output.index + output.fullMatch.length,
+                data: output.data,
+                pairIndex: idx,
+                fullMatch: output.fullMatch
+            });
+        });
 
-            // Add content before this tool block
-            segments.push(formattedContent.substring(lastIndex, pair.start.index));
+        // Sort by position
+        segmentsToReplace.sort((a, b) => a.index - b.index);
 
-            // Add placeholder
-            const placeholder = `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
-            segments.push(placeholder);
+        // Build placeholders
+        const pairPlaceholders = pairs.map((pair, idx) => {
+            return `§§§TOOL_BLOCK_START§§§${pair.start.data}§§§TOOL_BLOCK_MID§§§${pair.output.data}§§§TOOL_BLOCK_END§§§`;
+        });
 
-            // Update last index
-            lastIndex = pair.output.index + pair.output.fullMatch.length;
+        // Replace in reverse order
+        for (let i = segmentsToReplace.length - 1; i >= 0; i--) {
+            const segment = segmentsToReplace[i];
+            const replacement = segment.type === 'start' ? pairPlaceholders[segment.pairIndex] : '';
+            formattedContent = formattedContent.substring(0, segment.index) +
+                             replacement +
+                             formattedContent.substring(segment.endIndex);
         }
-
-        // Add remaining content
-        segments.push(formattedContent.substring(lastIndex));
-
-        // Rebuild
-        formattedContent = segments.join('');
     }
 
     // Now do standard markdown conversion
