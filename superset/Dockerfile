@@ -15,6 +15,6 @@ COPY --chown=1001 ./superset-init.sh /superset-init.sh
 COPY ./ /app/
 ENV SUPERSET_CONFIG_PATH /app/superset_config.py
 
-RUN pip install superset-chat==0.1.0a15
+RUN pip install superset-chat==0.1.0a16
 
 ENTRYPOINT [ "/superset-init.sh" ]

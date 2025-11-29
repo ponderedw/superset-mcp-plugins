@@ -204,23 +204,66 @@ async function sendMessage(event) {
                             }
 
                             // Convert tool execution blocks to expandable format
-                            // The content has REAL newlines, not \n strings, so we need to match them properly
-                            // Use \s* to match any whitespace including real newlines
-                            // Important: The pattern must NOT be greedy and must stop at "Tool Output:"
-                            const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*(?=\s*Tool Output:)\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
+                            // The content has REAL newlines, not \n strings
+                            // Strategy: Tools can start in parallel, so we need to match backwards from each "Tool Output"
+                            // First, extract all "Start Running Tool" blocks and all "Tool Output" blocks separately
 
-                            let matchCount = 0;
+                            const toolStarts = [];
+                            const toolOutputs = [];
 
-                            finalContent = finalContent.replace(toolPattern, function(match, toolData, outputData) {
-                                matchCount++;
-                                console.log('✓ Match found #' + matchCount);
-                                console.log('Tool data:', toolData.substring(0, 100));
-                                console.log('Output data:', outputData.substring(0, 100));
-                                return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
-                            });
+                            // Find all "Start Running Tool" blocks
+                            const startPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```/g;
+                            let match;
+                            while ((match = startPattern.exec(finalContent)) !== null) {
+                                toolStarts.push({
+                                    fullMatch: match[0],
+                                    data: match[1].trim(),
+                                    index: match.index
+                                });
+                            }
 
-                            console.log('Total tool blocks found:', matchCount);
-                            if (matchCount === 0) {
+                            // Find all "Tool Output" blocks
+                            const outputPattern = /Tool Output:\s*```\s*([\s\S]*?)```/g;
+                            while ((match = outputPattern.exec(finalContent)) !== null) {
+                                toolOutputs.push({
+                                    fullMatch: match[0],
+                                    data: match[1].trim(),
+                                    index: match.index
+                                });
+                            }
+
+                            console.log('Found', toolStarts.length, 'tool starts and', toolOutputs.length, 'tool outputs');
+
+                            // Now pair them up - match in order (first start with first output, etc.)
+                            const pairs = [];
+                            const minPairs = Math.min(toolStarts.length, toolOutputs.length);
+
+                            for (let i = 0; i < minPairs; i++) {
+                                pairs.push({
+                                    start: toolStarts[i],
+                                    output: toolOutputs[i]
+                                });
+                                console.log('Pairing tool #' + (i + 1) + ':', toolStarts[i].data.substring(0, 50), '...');
+                            }
+
+                            console.log('Created', pairs.length, 'pairs');
+
+                            // Replace from last to first to avoid index issues
+                            for (let i = pairs.length - 1; i >= 0; i--) {
+                                const pair = pairs[i];
+                                const placeholder = `<TOOL_BLOCK_START>${pair.start.data}<TOOL_BLOCK_MID>${pair.output.data}<TOOL_BLOCK_END>`;
+
+                                // Replace the tool start and output with placeholder
+                                const startPos = pair.start.index;
+                                const endPos = pair.output.index + pair.output.fullMatch.length;
+
+                                finalContent = finalContent.substring(0, startPos) + placeholder + finalContent.substring(endPos);
+
+                                console.log('✓ Paired tool #' + (i + 1));
+                            }
+
+                            console.log('Total tool blocks paired:', pairs.length);
+                            if (pairs.length === 0) {
                                 console.log('⚠️ WARNING: No tool blocks matched! Checking for partial patterns...');
                                 console.log('Has "Start Running Tool:"?', finalContent.includes('Start Running Tool:'));
                                 console.log('Has "Tool Output:"?', finalContent.includes('Tool Output:'));
@@ -297,13 +340,48 @@ function addMessage(content, sender) {
 
     // For assistant messages, process tool blocks first
     if (sender === 'assistant') {
-        // Convert tool execution blocks to expandable format
-        // Use \s* to match any whitespace including real newlines
-        const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*(?=\s*Tool Output:)\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
+        // Extract all "Start Running Tool" and "Tool Output" blocks
+        const toolStarts = [];
+        const toolOutputs = [];
 
-        formattedContent = formattedContent.replace(toolPattern, function(match, toolData, outputData) {
-            return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
-        });
+        const startPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```/g;
+        let match;
+        while ((match = startPattern.exec(formattedContent)) !== null) {
+            toolStarts.push({
+                fullMatch: match[0],
+                data: match[1].trim(),
+                index: match.index
+            });
+        }
+
+        const outputPattern = /Tool Output:\s*```\s*([\s\S]*?)```/g;
+        while ((match = outputPattern.exec(formattedContent)) !== null) {
+            toolOutputs.push({
+                fullMatch: match[0],
+                data: match[1].trim(),
+                index: match.index
+            });
+        }
+
+        // Pair them up - match in order (first start with first output, etc.)
+        const pairs = [];
+        const minPairs = Math.min(toolStarts.length, toolOutputs.length);
+
+        for (let i = 0; i < minPairs; i++) {
+            pairs.push({
+                start: toolStarts[i],
+                output: toolOutputs[i]
+            });
+        }
+
+        // Replace from last to first
+        for (let i = pairs.length - 1; i >= 0; i--) {
+            const pair = pairs[i];
+            const placeholder = `<TOOL_BLOCK_START>${pair.start.data}<TOOL_BLOCK_MID>${pair.output.data}<TOOL_BLOCK_END>`;
+            const startPos = pair.start.index;
+            const endPos = pair.output.index + pair.output.fullMatch.length;
+            formattedContent = formattedContent.substring(0, startPos) + placeholder + formattedContent.substring(endPos);
+        }
     }
 
     // Now do standard markdown conversion
