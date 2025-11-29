@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "superset-chat"
-version = "0.1.0a14"
+version = "0.1.0a15"
 description = "AI Assistant plugin for Apache Superset"
 license = "MIT"
 authors = ["Ponder"]

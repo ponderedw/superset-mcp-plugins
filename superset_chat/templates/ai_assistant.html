@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('chatInputForm').addEventListener('submit', sendMessage);
     document.getElementById('newChatBtn').addEventListener('click', newChat);
     document.getElementById('clearChatBtn').addEventListener('click', clearChat);
-    document.getElementById('showExamplesBtn').addEventListener('click', showExamples);
 });
 
 async function initializeCSRF() {
@@ -207,7 +206,8 @@ async function sendMessage(event) {
                             // Convert tool execution blocks to expandable format
                             // The content has REAL newlines, not \n strings, so we need to match them properly
                             // Use \s* to match any whitespace including real newlines
-                            const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
+                            // Important: The pattern must NOT be greedy and must stop at "Tool Output:"
+                            const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*(?=\s*Tool Output:)\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
 
                             let matchCount = 0;
 
@@ -241,7 +241,7 @@ async function sendMessage(event) {
 
                                 return `<br>
                                     <div class="code-block-container">
-                                        <div class="code-block-header collapsed" onclick="toggleCodeBlock(this)">
+                                        <div class="code-block-header collapsed" data-toggle="code-block">
                                             <span>🔧 Tool Execution</span>
                                             <span class="toggle-icon">▼</span>
                                         </div>
@@ -257,7 +257,17 @@ async function sendMessage(event) {
                             });
 
                             assistantContentDiv.innerHTML = finalContent;
-                            console.log('Final content set');
+
+                            // Add event listeners to all expandable headers (CSP-compliant)
+                            const expandableHeaders = assistantMessageDiv.querySelectorAll('[data-toggle="code-block"]');
+                            expandableHeaders.forEach(header => {
+                                header.addEventListener('click', function() {
+                                    toggleCodeBlock(this);
+                                });
+                                header.style.cursor = 'pointer';
+                            });
+
+                            console.log('Final content set with', expandableHeaders.length, 'tool blocks');
                             break;
                         }
                     } catch (e) {
@@ -289,7 +299,7 @@ function addMessage(content, sender) {
     if (sender === 'assistant') {
         // Convert tool execution blocks to expandable format
         // Use \s* to match any whitespace including real newlines
-        const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
+        const toolPattern = /Start Running Tool:\s*```\s*([\s\S]*?)```\s*(?=\s*Tool Output:)\s*Tool Output:\s*```\s*([\s\S]*?)```/g;
 
         formattedContent = formattedContent.replace(toolPattern, function(match, toolData, outputData) {
             return `<TOOL_BLOCK_START>${toolData.trim()}<TOOL_BLOCK_MID>${outputData.trim()}<TOOL_BLOCK_END>`;
@@ -311,7 +321,7 @@ function addMessage(content, sender) {
 
             return `<br>
                 <div class="code-block-container">
-                    <div class="code-block-header collapsed" onclick="toggleCodeBlock(this)">
+                    <div class="code-block-header collapsed" data-toggle="code-block">
                         <span>🔧 Tool Execution</span>
                         <span class="toggle-icon">▼</span>
                     </div>
@@ -334,6 +344,17 @@ function addMessage(content, sender) {
 
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Add event listeners to expandable headers (CSP-compliant)
+    if (sender === 'assistant') {
+        const expandableHeaders = messageDiv.querySelectorAll('[data-toggle="code-block"]');
+        expandableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                toggleCodeBlock(this);
+            });
+            header.style.cursor = 'pointer';
+        });
+    }
 }
 
 function showTypingIndicator() {
